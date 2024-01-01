@@ -487,10 +487,13 @@ void CCAMS::AssignAutoSquawk(CFlightPlan& FlightPlan)
 	if (find(ProcessedFlightPlans.begin(), ProcessedFlightPlans.end(), FlightPlan.GetCallsign()) != ProcessedFlightPlans.end())
 	{
 		// this flight was already processed
-		if (!HasValidSquawk(FlightPlan))
+		if (HasValidSquawk(FlightPlan))
+			return;
+
+		// The flight was already processed, but the assigned code has become invalid again
+		// This is probably due to a duplicate, where the code assigned earlier was assigned to a second aircraft by another controller
+		else if (FlightPlan.GetTrackingControllerIsMe())
 		{
-			// The flight was already processed, but the assigned code has become invalid again
-			// This is probably due to a duplicate, where the code assigned earlier was assigned to a second aircraft by another controller
 			// attempting to change to squawk of the other aircraft
 			for (CRadarTarget RadarTarget = RadarTargetSelectFirst(); RadarTarget.IsValid();
 				RadarTarget = RadarTargetSelectNext(RadarTarget))
@@ -510,10 +513,21 @@ void CCAMS::AssignAutoSquawk(CFlightPlan& FlightPlan)
 #endif
 				}
 			}
+			return;
 		}
-
-		return;
+		else
+		{
+			// removing the call sign from the processed flight plan list to initiate a new assignment
+			ProcessedFlightPlans.erase(remove(ProcessedFlightPlans.begin(), ProcessedFlightPlans.end(), FlightPlan.GetCallsign()), ProcessedFlightPlans.end());
+#ifdef _DEBUG
+			log << FlightPlan.GetCallsign() << ":FP removed from processed list:strip push received";
+			writeLogFile(log);
+			string DisplayMsg = string{ FlightPlan.GetCallsign() } + " removed from processed list because a strip push has been received";
+			DisplayUserMessage(MY_PLUGIN_NAME, "Debug", DisplayMsg.c_str(), true, false, false, false, false);
+#endif
+		}
 	}
+
 	if (FlightPlan.GetSimulated() || strcmp(FlightPlan.GetFlightPlanData().GetPlanType(), "V") == 0)
 	{
 		// disregard simulated flight plans (out of the controllers range)
@@ -553,29 +567,6 @@ void CCAMS::AssignAutoSquawk(CFlightPlan& FlightPlan)
 #endif
 		}
 		// if this flight is not tracked by the current controller yet, it is kept for revalidation in the next round
-
-		return;
-	}
-	else if (FlightPlan.GetTrackingControllerIsMe())
-	{
-		// controller has started tracking, so this is the last attempt to assign an automatic squawk
-		if (find(ProcessedFlightPlans.begin(), ProcessedFlightPlans.end(), FlightPlan.GetCallsign()) == ProcessedFlightPlans.end())
-		{
-			ProcessedFlightPlans.push_back(FlightPlan.GetCallsign());
-#ifdef _DEBUG
-			log << FlightPlan.GetCallsign() << ":FP processed:Sector Entry Time:" << FlightPlan.GetSectorEntryMinutes();
-			writeLogFile(log);
-			DisplayMsg = string{ FlightPlan.GetCallsign() } + " has NOT a valid squawk code (ASSIGNED '" + assr + "', SET " + pssr + ") due to a detected duplicate, attempting to change to squawk of the other aircraft since the aircraft is already tracked";
-			DisplayUserMessage(MY_PLUGIN_NAME, "Debug", DisplayMsg.c_str(), true, false, false, false, false);
-#endif
-
-		}
-#ifdef _DEBUG
-		DisplayMsg = string{ FlightPlan.GetCallsign() } + " has NOT a valid squawk code (ASSIGNED '" + assr + "', SET " + pssr + ") due to a detected duplicate, attempting to change to squawk of the other aircraft since the aircraft is already tracked";
-		//DisplayUserMessage(MY_PLUGIN_NAME, "Debug", DisplayMsg.c_str(), true, false, false, false, false);
-#endif
-
-
 
 		return;
 	}
