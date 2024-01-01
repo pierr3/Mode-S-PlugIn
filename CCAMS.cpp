@@ -515,17 +515,15 @@ void CCAMS::AssignAutoSquawk(CFlightPlan& FlightPlan)
 			}
 			return;
 		}
-		else
-		{
-			// removing the call sign from the processed flight plan list to initiate a new assignment
-			ProcessedFlightPlans.erase(remove(ProcessedFlightPlans.begin(), ProcessedFlightPlans.end(), FlightPlan.GetCallsign()), ProcessedFlightPlans.end());
+
+		// removing the call sign from the processed flight plan list to initiate a new assignment
+		ProcessedFlightPlans.erase(remove(ProcessedFlightPlans.begin(), ProcessedFlightPlans.end(), FlightPlan.GetCallsign()), ProcessedFlightPlans.end());
 #ifdef _DEBUG
-			log << FlightPlan.GetCallsign() << ":FP removed from processed list:strip push received";
-			writeLogFile(log);
-			string DisplayMsg = string{ FlightPlan.GetCallsign() } + " removed from processed list because a strip push has been received";
-			DisplayUserMessage(MY_PLUGIN_NAME, "Debug", DisplayMsg.c_str(), true, false, false, false, false);
+		log << FlightPlan.GetCallsign() << ":duplicate assigned code:FP removed from processed list";
+		writeLogFile(log);
+		string DisplayMsg = string{ FlightPlan.GetCallsign() } + " removed from processed list because the assigned code is no longer valid";
+		DisplayUserMessage(MY_PLUGIN_NAME, "Debug", DisplayMsg.c_str(), true, false, false, false, false);
 #endif
-		}
 	}
 
 	if (FlightPlan.GetSimulated() || strcmp(FlightPlan.GetFlightPlanData().GetPlanType(), "V") == 0)
