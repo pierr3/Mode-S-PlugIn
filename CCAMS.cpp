@@ -161,7 +161,8 @@ bool CCAMS::PluginCommands(const char* Command)
 				if (!ControllerMyself().IsValid() || !ControllerMyself().IsController() || (ControllerMyself().GetFacility() > 1 && ControllerMyself().GetFacility() < 5))
 					DisplayUserMessage(MY_PLUGIN_NAME, "Debug", "This controller is not allowed to automatically assign squawks", true, false, false, false, false);
 
-				if (IsFlightPlanProcessed(FlightPlan))
+
+				if (find(ProcessedFlightPlans.begin(), ProcessedFlightPlans.end(), FlightPlan.GetCallsign()) != ProcessedFlightPlans.end())
 					DisplayUserMessage(MY_PLUGIN_NAME, "Debug", "This flight plan has already been processed", true, false, false, false, false);
 
 				return true;
@@ -328,13 +329,18 @@ void CCAMS::OnFlightPlanFlightStripPushed(CFlightPlan FlightPlan, const char* sS
 #endif
 	if (strcmp(sTargetController, FlightPlan.GetCallsign()) == 0)
 	{
-		ProcessedFlightPlans.erase(remove(ProcessedFlightPlans.begin(), ProcessedFlightPlans.end(), FlightPlan.GetCallsign()), ProcessedFlightPlans.end());
+		// shouldn't be required that often anymore (if at all) since call signs are not added to the list that generously
+		auto it = find(ProcessedFlightPlans.begin(), ProcessedFlightPlans.end(), FlightPlan.GetCallsign());
+		if (it != ProcessedFlightPlans.end()) {
+			//ProcessedFlightPlans.erase(it);
+			ProcessedFlightPlans.erase(remove(ProcessedFlightPlans.begin(), ProcessedFlightPlans.end(), FlightPlan.GetCallsign()), ProcessedFlightPlans.end());
 #ifdef _DEBUG
-		log << FlightPlan.GetCallsign() << ":FP removed from processed list:strip push received";
-		writeLogFile(log);
-		string DisplayMsg = string{ FlightPlan.GetCallsign() } + " removed from processed list because a strip push has been received";
-		DisplayUserMessage(MY_PLUGIN_NAME, "Debug", DisplayMsg.c_str(), true, false, false, false, false);
+			log << FlightPlan.GetCallsign() << ":FP removed from processed list:strip push received";
+			writeLogFile(log);
+			string DisplayMsg = string{ FlightPlan.GetCallsign() } + " removed from processed list because a strip push has been received";
+			DisplayUserMessage(MY_PLUGIN_NAME, "Debug", DisplayMsg.c_str(), true, false, false, false, false);
 #endif
+		}
 	}
 
 }
@@ -478,6 +484,36 @@ void CCAMS::AssignAutoSquawk(CFlightPlan& FlightPlan)
 		return;
 
 	// check for exclusion arguments from automatic squawk assignment
+	if (find(ProcessedFlightPlans.begin(), ProcessedFlightPlans.end(), FlightPlan.GetCallsign()) != ProcessedFlightPlans.end())
+	{
+		// this flight was already processed
+		if (!HasValidSquawk(FlightPlan))
+		{
+			// The flight was already processed, but the assigned code has become invalid again
+			// This is probably due to a duplicate, where the code assigned earlier was assigned to a second aircraft by another controller
+			// attempting to change to squawk of the other aircraft
+			for (CRadarTarget RadarTarget = RadarTargetSelectFirst(); RadarTarget.IsValid();
+				RadarTarget = RadarTargetSelectNext(RadarTarget))
+			{
+				if (_stricmp(RadarTarget.GetCallsign(), FlightPlan.GetCallsign()) == 0)
+					continue;
+				else if (_stricmp(RadarTarget.GetCorrelatedFlightPlan().GetControllerAssignedData().GetSquawk(), FlightPlan.GetControllerAssignedData().GetSquawk()) == 0
+					&& RadarTarget.GetCorrelatedFlightPlan().GetTrackingControllerCallsign() > 0)
+				{
+					PendingSquawks.insert(std::make_pair(RadarTarget.GetCallsign(), std::async(LoadWebSquawk,
+						RadarTarget.GetCorrelatedFlightPlan(), ControllerMyself(), collectUsedCodes(RadarTarget.GetCorrelatedFlightPlan()), IsADEPvicinity(RadarTarget.GetCorrelatedFlightPlan()), GetConnectionType())));
+#ifdef _DEBUG
+					log << RadarTarget.GetCallsign() << ":duplicate assigned code:unique code AUTO assigned:" << FlightPlan.GetCallsign() << " already tracked by " << FlightPlan.GetTrackingControllerCallsign();
+					writeLogFile(log);
+					DisplayMsg = string{ RadarTarget.GetCallsign() } + ", unique code AUTO assigned due to a detected duplicate with " + FlightPlan.GetCallsign();
+					DisplayUserMessage(MY_PLUGIN_NAME, "Debug", DisplayMsg.c_str(), true, false, false, false, false);
+#endif
+				}
+			}
+		}
+
+		return;
+	}
 	if (FlightPlan.GetSimulated() || strcmp(FlightPlan.GetFlightPlanData().GetPlanType(), "V") == 0)
 	{
 		// disregard simulated flight plans (out of the controllers range)
@@ -506,7 +542,7 @@ void CCAMS::AssignAutoSquawk(CFlightPlan& FlightPlan)
 	else if (HasValidSquawk(FlightPlan))
 	{
 		// this flight has already assigned a valid unique code
-		if (find(ProcessedFlightPlans.begin(), ProcessedFlightPlans.end(), FlightPlan.GetCallsign()) == ProcessedFlightPlans.end())
+		if (FlightPlan.GetTrackingControllerIsMe())
 		{
 			ProcessedFlightPlans.push_back(FlightPlan.GetCallsign());
 #ifdef _DEBUG
@@ -515,42 +551,32 @@ void CCAMS::AssignAutoSquawk(CFlightPlan& FlightPlan)
 			DisplayMsg = string{ FlightPlan.GetCallsign() } + " processed because it has already a valid squawk (ASSIGNED '" + assr + "', SET " + pssr + ")";
 			DisplayUserMessage(MY_PLUGIN_NAME, "Debug", DisplayMsg.c_str(), true, false, false, false, false);
 #endif
-
 		}
+		// if this flight is not tracked by the current controller yet, it is kept for revalidation in the next round
+
 		return;
 	}
 	else if (FlightPlan.GetTrackingControllerIsMe())
 	{
+		// controller has started tracking, so this is the last attempt to assign an automatic squawk
+		if (find(ProcessedFlightPlans.begin(), ProcessedFlightPlans.end(), FlightPlan.GetCallsign()) == ProcessedFlightPlans.end())
+		{
+			ProcessedFlightPlans.push_back(FlightPlan.GetCallsign());
+#ifdef _DEBUG
+			log << FlightPlan.GetCallsign() << ":FP processed:Sector Entry Time:" << FlightPlan.GetSectorEntryMinutes();
+			writeLogFile(log);
+			DisplayMsg = string{ FlightPlan.GetCallsign() } + " has NOT a valid squawk code (ASSIGNED '" + assr + "', SET " + pssr + ") due to a detected duplicate, attempting to change to squawk of the other aircraft since the aircraft is already tracked";
+			DisplayUserMessage(MY_PLUGIN_NAME, "Debug", DisplayMsg.c_str(), true, false, false, false, false);
+#endif
+
+		}
 #ifdef _DEBUG
 		DisplayMsg = string{ FlightPlan.GetCallsign() } + " has NOT a valid squawk code (ASSIGNED '" + assr + "', SET " + pssr + ") due to a detected duplicate, attempting to change to squawk of the other aircraft since the aircraft is already tracked";
 		//DisplayUserMessage(MY_PLUGIN_NAME, "Debug", DisplayMsg.c_str(), true, false, false, false, false);
 #endif
 
-		if (strlen(FlightPlan.GetTrackingControllerCallsign()) > 0)
-		{
-			// another controller is currently tracking the flight
-			return;
-		}
 
 
-		for (CRadarTarget RadarTarget = RadarTargetSelectFirst(); RadarTarget.IsValid();
-			RadarTarget = RadarTargetSelectNext(RadarTarget))
-		{
-			if (_stricmp(RadarTarget.GetCallsign(), FlightPlan.GetCallsign()) == 0)
-				continue;
-			else if (_stricmp(RadarTarget.GetCorrelatedFlightPlan().GetControllerAssignedData().GetSquawk(), FlightPlan.GetControllerAssignedData().GetSquawk()) == 0)
-			{
-				PendingSquawks.insert(std::make_pair(RadarTarget.GetCallsign(), std::async(LoadWebSquawk,
-					RadarTarget.GetCorrelatedFlightPlan(), ControllerMyself(), collectUsedCodes(RadarTarget.GetCorrelatedFlightPlan()), IsADEPvicinity(RadarTarget.GetCorrelatedFlightPlan()), GetConnectionType())));
-#ifdef _DEBUG
-				log << RadarTarget.GetCallsign() << ":duplicate assigned code:unique code AUTO assigned:";
-				writeLogFile(log);
-				DisplayMsg = string{ RadarTarget.GetCallsign() } + ", unique code AUTO assigned";
-				DisplayUserMessage(MY_PLUGIN_NAME, "Debug", DisplayMsg.c_str(), true, false, false, false, false);
-#endif
-
-			}
-		}
 		return;
 	}
 	else
@@ -630,7 +656,7 @@ void CCAMS::AssignAutoSquawk(CFlightPlan& FlightPlan)
 		PendingSquawks.insert(std::make_pair(FlightPlan.GetCallsign(), std::async(LoadWebSquawk,
 			FlightPlan, ControllerMyself(), collectUsedCodes(FlightPlan), IsADEPvicinity(FlightPlan), GetConnectionType())));
 #ifdef _DEBUG
-		log << FlightPlan.GetCallsign() << ":FP processed:unique code AUTO assigned:";
+		log << FlightPlan.GetCallsign() << ":FP processed:unique code AUTO assigned";
 		writeLogFile(log);
 		DisplayMsg = string{ FlightPlan.GetCallsign() } + ", unique code AUTO assigned";
 		DisplayUserMessage(MY_PLUGIN_NAME, "Debug", DisplayMsg.c_str(), true, false, false, false, false);
