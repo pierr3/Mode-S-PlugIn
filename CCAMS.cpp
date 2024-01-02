@@ -451,7 +451,7 @@ void CCAMS::OnTimer(int Counter)
 
 #ifdef _DEBUG
 	if (ConnectionStatus == 10)
-		DisplayUserMessage(MY_PLUGIN_NAME, "Debug", "Active connection establish, automatic squawk assignment enabled", true, false, false, false, false);
+		DisplayUserMessage(MY_PLUGIN_NAME, "Debug", "Active connection established, automatic squawk assignment enabled", true, false, false, false, false);
 #endif
 
 
@@ -1012,7 +1012,7 @@ bool CCAMS::HasValidSquawk(const EuroScopePlugIn::CFlightPlan& FlightPlan)
 			{
 				// duplicate identified for the actual set code
 #ifdef _DEBUG
-				DisplayMsg = "SET code '" + string{ assr } + "' of " + FlightPlan.GetCallsign() + " is already used by " + RadarTarget.GetCallsign();
+				DisplayMsg = "SET code '" + string{ pssr } + "' of " + FlightPlan.GetCallsign() + " is already used by " + RadarTarget.GetCallsign();
 				DisplayUserMessage(MY_PLUGIN_NAME, "Debug", DisplayMsg.c_str(), true, false, false, false, false);
 #endif
 				return false;
@@ -1027,7 +1027,7 @@ bool CCAMS::HasValidSquawk(const EuroScopePlugIn::CFlightPlan& FlightPlan)
 	// no duplicate with assigend or used codes has been found
 #ifdef _DEBUG
 	DisplayMsg = "No duplicates found for " + string{ FlightPlan.GetCallsign() } + " (ASSIGNED '" + assr + "', SET code " + pssr + ")";
-	DisplayUserMessage(MY_PLUGIN_NAME, "Debug", DisplayMsg.c_str(), true, false, false, false, false);
+	//DisplayUserMessage(MY_PLUGIN_NAME, "Debug", DisplayMsg.c_str(), true, false, false, false, false);
 #endif
 	return true;
 }
