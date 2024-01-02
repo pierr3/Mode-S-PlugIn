@@ -14,7 +14,7 @@ using namespace EuroScopePlugIn;
 
 #define MY_PLUGIN_NAME			"CCAMS"
 #ifdef _DEBUG
-#define MY_PLUGIN_VERSION		"2.3.5 DEV"
+#define MY_PLUGIN_VERSION		"2.3.6 DEV"
 #else
 #define MY_PLUGIN_VERSION		"2.3.3"
 #endif

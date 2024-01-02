@@ -534,25 +534,31 @@ void CCAMS::AssignAutoSquawk(CFlightPlan& FlightPlan)
 	{
 		// disregard simulated flight plans (out of the controllers range)
 		// disregard flight with flight rule VFR
-		ProcessedFlightPlans.push_back(FlightPlan.GetCallsign());
+		if (find(ProcessedFlightPlans.begin(), ProcessedFlightPlans.end(), FlightPlan.GetCallsign()) != ProcessedFlightPlans.end())
+		{
+			ProcessedFlightPlans.push_back(FlightPlan.GetCallsign());
 #ifdef _DEBUG
-		log << FlightPlan.GetCallsign() << ":FP processed:Simulated/FP Type";
-		writeLogFile(log);
-		DisplayMsg = string{ FlightPlan.GetCallsign() } + " processed due to Simulation Flag / Flight Plan Type";
-		DisplayUserMessage(MY_PLUGIN_NAME, "Debug", DisplayMsg.c_str(), true, false, false, false, false);
+			log << FlightPlan.GetCallsign() << ":FP processed:Simulated/FP Type";
+			writeLogFile(log);
+			DisplayMsg = string{ FlightPlan.GetCallsign() } + " processed due to Simulation Flag / Flight Plan Type";
+			DisplayUserMessage(MY_PLUGIN_NAME, "Debug", DisplayMsg.c_str(), true, false, false, false, false);
 #endif
+		}
 		return;
 	}
 	else if (FlightPlan.GetFlightPlanData().IsReceived() && FlightPlan.GetSectorEntryMinutes() < 0)
 	{
 		// the flight will never enter the sector of the current controller
-		ProcessedFlightPlans.push_back(FlightPlan.GetCallsign());
+		if (find(ProcessedFlightPlans.begin(), ProcessedFlightPlans.end(), FlightPlan.GetCallsign()) != ProcessedFlightPlans.end())
+		{
+			ProcessedFlightPlans.push_back(FlightPlan.GetCallsign());
 #ifdef _DEBUG
-		log << FlightPlan.GetCallsign() << ":FP processed:Sector Entry Time:" << FlightPlan.GetSectorEntryMinutes();
-		writeLogFile(log);
-		DisplayMsg = string{ FlightPlan.GetCallsign() } + " processed because it will not enter the controllers sector";
-		DisplayUserMessage(MY_PLUGIN_NAME, "Debug", DisplayMsg.c_str(), true, false, false, false, false);
+			log << FlightPlan.GetCallsign() << ":FP processed:Sector Entry Time:" << FlightPlan.GetSectorEntryMinutes();
+			writeLogFile(log);
+			DisplayMsg = string{ FlightPlan.GetCallsign() } + " processed because it will not enter the controllers sector";
+			DisplayUserMessage(MY_PLUGIN_NAME, "Debug", DisplayMsg.c_str(), true, false, false, false, false);
 #endif
+		}
 		return;
 	}
 	else if (HasValidSquawk(FlightPlan))
@@ -560,13 +566,16 @@ void CCAMS::AssignAutoSquawk(CFlightPlan& FlightPlan)
 		// this flight has already assigned a valid unique code
 		if (FlightPlan.GetTrackingControllerIsMe())
 		{
-			ProcessedFlightPlans.push_back(FlightPlan.GetCallsign());
+			{
+				if (find(ProcessedFlightPlans.begin(), ProcessedFlightPlans.end(), FlightPlan.GetCallsign()) != ProcessedFlightPlans.end())
+					ProcessedFlightPlans.push_back(FlightPlan.GetCallsign());
 #ifdef _DEBUG
-			log << FlightPlan.GetCallsign() << ":FP processed:has already a valid squawk:" << assr << ":" << pssr;
-			writeLogFile(log);
-			DisplayMsg = string{ FlightPlan.GetCallsign() } + " processed because it has already a valid squawk (ASSIGNED '" + assr + "', SET " + pssr + ")";
-			DisplayUserMessage(MY_PLUGIN_NAME, "Debug", DisplayMsg.c_str(), true, false, false, false, false);
+				log << FlightPlan.GetCallsign() << ":FP processed:has already a valid squawk:" << assr << ":" << pssr;
+				writeLogFile(log);
+				DisplayMsg = string{ FlightPlan.GetCallsign() } + " processed because it has already a valid squawk (ASSIGNED '" + assr + "', SET " + pssr + ")";
+				DisplayUserMessage(MY_PLUGIN_NAME, "Debug", DisplayMsg.c_str(), true, false, false, false, false);
 #endif
+			}
 		}
 		// if this flight is not tracked by the current controller yet, it is kept for revalidation in the next round
 
@@ -1003,7 +1012,7 @@ bool CCAMS::HasValidSquawk(const EuroScopePlugIn::CFlightPlan& FlightPlan)
 			{
 				// duplicate identified for the actual set code
 #ifdef _DEBUG
-				DisplayMsg = "SET code " + string{ assr } + " of " + FlightPlan.GetCallsign() + " is already used by " + RadarTarget.GetCallsign();
+				DisplayMsg = "SET code '" + string{ assr } + "' of " + FlightPlan.GetCallsign() + " is already used by " + RadarTarget.GetCallsign();
 				DisplayUserMessage(MY_PLUGIN_NAME, "Debug", DisplayMsg.c_str(), true, false, false, false, false);
 #endif
 				return false;
