@@ -14,7 +14,7 @@ using namespace EuroScopePlugIn;
 
 #define MY_PLUGIN_NAME			"CCAMS"
 #ifdef _DEBUG
-#define MY_PLUGIN_VERSION		"2.3.6 DEV"
+#define MY_PLUGIN_VERSION		"2.3.7 DEV"
 #else
 #define MY_PLUGIN_VERSION		"2.3.3"
 #endif
@@ -109,6 +109,7 @@ private:
 	bool pluginVersionCheck;
 	bool acceptEquipmentICAO;
 	bool acceptEquipmentFAA;
+	bool updateOnStartTracking;
 	bool autoAssign;
 	int APTcodeMaxGS;
 	int APTcodeMaxDist;
